@@ -25,8 +25,9 @@ def gen_poisson_noise(unit):
 
 
 def load_unit(path):
-    # Load
+    # Load a single frame
     file_suffix = path.split('.')[-1].lower()
+    # cv2.imread reads in BGR and uint8 format while skimage.io.imread reads in RGB and uint8 format
     if file_suffix in ['jpg', 'png']:
         try:
             unit = cv2.cvtColor(imread(path).astype(np.uint8), cv2.COLOR_RGB2BGR)
@@ -38,8 +39,18 @@ def load_unit(path):
         print('Unsupported file type.')
         return None
 
+
 def unit_preprocessing(unit, preproc=[], is_test=False):
-    # Preprocessing
+    """
+    Preprocessing: 
+    -bilateralFilter/resize/downsample/poissonNoise
+    -turn BGR into RGB
+    -transform into [-1.0, 1.0]
+    -change the shape into [channel, width, height]
+
+    For training, batch A, B and C is preprocessed while batch M is not (the network output is not restrained within [-1.0, 1.0]).
+    For test, the inputs are batch A and C (both unperturbed) and both are preprocessed.
+    """
     if 'BF' in preproc and is_test:
         unit = cv2.bilateralFilter(unit, 9, 75, 75)
     if 'resize' in preproc:
@@ -54,7 +65,7 @@ def unit_preprocessing(unit, preproc=[], is_test=False):
 
             # unit = unit + gen_poisson_noise(unit) * np.random.uniform(0, 0.3)
 
-            unit = random_noise(unit, mode='poisson')      # unit: 0 ~ 1
+            unit = random_noise(unit, mode='poisson')      # unit: 0 ~ 1.0
             unit = unit * 255
     except Exception as e:
         print('EX:', e, unit.shape, unit.dtype)
@@ -64,8 +75,12 @@ def unit_preprocessing(unit, preproc=[], is_test=False):
     unit = np.transpose(unit, (2, 0, 1))
     return unit
 
-
 def unit_postprocessing(unit, vid_size=None):
+    """
+    postprocessing:
+    -clip the output frame between 0 and 255 as uint8
+    -change the shape into [width, height, channel]
+    """
     unit = unit.squeeze()
     unit = unit.cpu().detach().numpy()
     unit = np.clip(unit, -1, 1)
@@ -73,7 +88,6 @@ def unit_postprocessing(unit, vid_size=None):
     if unit.shape[:2][::-1] != vid_size and vid_size is not None:
         unit = cv2.resize(unit, vid_size, interpolation=cv2.INTER_CUBIC)
     return unit
-
 
 def get_paths_ABC(config, mode):
     if mode in ('train', 'test_on_trainset'):

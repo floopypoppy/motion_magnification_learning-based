@@ -9,11 +9,12 @@ class Config(object):
         # General
         self.epochs = 12
         # self.GPUs = '0'
-        self.batch_size = 6     # * torch.cuda.device_count()     # len(self.GPUs.split(','))
+        self.batch_size = 2     # * torch.cuda.device_count()     # len(self.GPUs.split(','))
         self.date = '0510'
 
         # Data
-        self.data_dir = '../../../datasets/mm'
+        # self.data_dir = '../../../datasets/mm'
+        self.data_dir = 'D:/deepmag_data'
         self.dir_train = os.path.join(self.data_dir, 'train')
         self.dir_test = os.path.join(self.data_dir, 'test')
         self.dir_water = os.path.join(self.data_dir, 'train/train_vid_frames/val_water')
@@ -23,7 +24,7 @@ class Config(object):
         self.dir_guitar = os.path.join(self.data_dir, 'train/train_vid_frames/val_guitar')
         self.dir_cattoy = os.path.join(self.data_dir, 'train/train_vid_frames/val_cattoy')
         self.dir_myself = os.path.join(self.data_dir, 'train/train_vid_frames/myself')
-        self.frames_train = 'coco100000'        # you can adapt 100000 to a smaller number to train
+        self.frames_train = 'coco100'        # you can adapt 100000 to a smaller number to train
         self.cursor_end = int(self.frames_train.split('coco')[-1])
         self.coco_amp_lst = np.loadtxt(os.path.join(self.dir_train, 'train_mf.txt'))[:self.cursor_end]
         self.videos_train = []
@@ -34,7 +35,8 @@ class Config(object):
         self.lr = 1e-4
         self.betas = (0.9, 0.999)
         self.batch_size_test = 1
-        self.preproc = ['poisson']   # ['resize', ]
+        self.preproc = ['poisson']   
+        # ['resize', 'BF', 'downsample', 'poisson']
         self.pretrained_weights = ''
 
         # Callbacks

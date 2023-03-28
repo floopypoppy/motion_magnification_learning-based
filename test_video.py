@@ -1,3 +1,9 @@
+"""
+test 
+-put the test video frames A and C in a folder named X (for example) or folders X, Y, ...These frames can be generated with make_frameACB.py from test video frames.
+-add self.dir_X, self.dir_Y, ... to config.py
+-run it as python test_video X-Y-...
+"""
 import os
 import sys
 import cv2
@@ -23,8 +29,9 @@ state_dict = gen_state_dict(weights_path)
 
 model_test = MagNet().cuda()
 model_test.load_state_dict(state_dict)
-model_test.eval()
 print("Loading weights:", weights_file)
+
+model_test.eval()
 
 if len(sys.argv) == 1:
     testsets = 'baby-guitar-gun-drone-cattoy-water'
@@ -37,7 +44,7 @@ for testset in testsets:
         os.makedirs(dir_results)
 
     data_loader = get_gen_ABC(config, mode='test_on_'+testset)
-    print('Number of test image couples:', data_loader.data_len)
+    print('Number of test image pairs:', data_loader.data_len)
     vid_size = cv2.imread(data_loader.paths[0]).shape[:2][::-1]
 
     # Test
@@ -61,6 +68,7 @@ for testset in testsets:
             if len(frames) >= data_loader.data_len:
                 break
         data_loader = get_gen_ABC(config, mode='test_on_'+testset)
+        # concatenate the first original frame with magnified frames 2 to N
         frames = [unit_postprocessing(data_loader.gen_test()[0], vid_size=vid_size)] + frames
 
         # Make videos of framesMag
@@ -71,7 +79,7 @@ for testset in testsets:
         out = cv2.VideoWriter(
             os.path.join(video_dir, '{}_amp{}.avi'.format(testset, amp)),
             cv2.VideoWriter_fourcc(*'DIVX'),
-            FPS, frames[0].shape[-2::-1]
+            FPS, frames[0].shape[-2::-1] # ??? height and width reversed?
         )
         for frame in frames:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
@@ -79,5 +87,5 @@ for testset in testsets:
                         fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0, 0, 255), thickness=2)
             out.write(frame)
         out.release()
-        print('{} has been done.'.format(os.path.join(video_dir, '{}_amp{}.avi'.format(testset, amp))))
+        print('{} has been processed.'.format(os.path.join(video_dir, '{}_amp{}.avi'.format(testset, amp))))
 

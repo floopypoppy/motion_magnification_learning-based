@@ -3,17 +3,20 @@ import torch.nn as nn
 from data import numpy2cuda
 
 
-def truncated_normal_(tensor, mean=0, std=1):
-    size = tensor.shape
-    tmp = tensor.new_empty(size + (4,)).normal_()
-    valid = (tmp < 2) & (tmp > -2)
-    ind = valid.max(-1, keepdim=True)[1]
-    tensor.data.copy_(tmp.gather(-1, ind).squeeze(-1))
-    tensor.data.mul_(std).add_(mean)
-    return tensor
+# def truncated_normal_(tensor, mean=0, std=1):
+#     size = tensor.shape
+#     tmp = tensor.new_empty(size + (4,)).normal_()
+#     valid = (tmp < 2) & (tmp > -2)
+#     ind = valid.max(-1, keepdim=True)[1]
+#     tensor.data.copy_(tmp.gather(-1, ind).squeeze(-1))
+#     tensor.data.mul_(std).add_(mean)
+#     return tensor
 
 
 class Conv2D_activa(nn.Module):
+    """
+    2D convolutioal layer with options of padding and activation
+    """
     def __init__(
             self, in_channels, out_channels, kernel_size, stride,
             padding=0, dilation=1, activation='relu'
@@ -126,7 +129,7 @@ class Decoder(nn.Module):
         if self.texture_downsample:
             texture = self.texture_up(texture)
         if motion.shape != texture.shape:
-            texture = nn.functional.interpolate(texture, size=motion.shape[-2:])
+            texture = nn.functional.interpolate(texture, size=motion.shape[-2:]) # ??? is it possible
         x = torch.cat([texture, motion], 1)
 
         x = self.resblks(x)
@@ -150,7 +153,7 @@ class Manipulator(nn.Module):
         motion_delta = self.g(motion) * amp_factor
         motion_delta = self.h_conv(motion_delta)
         motion_delta = self.h_resblk(motion_delta)
-        motion_mag = motion_B + motion_delta
+        motion_mag = motion_B + motion_delta 
         return motion_mag
 
 

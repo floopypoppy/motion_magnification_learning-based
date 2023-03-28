@@ -1,6 +1,7 @@
 """
-Put it into the corresponding datasets directory, e.g. `/datasets/motion_mag_data/train/train_vid_frames` for me.
-Make the original frames into frameAs, frameBs, frameCs(same as frameBs here)
+Put it into the corresponding datasets directory, e.g. `/datasets/motion_mag_data/train/train_vid_frames`.
+Make the original frames into frameAs, frameBs, frameCs(same as frameBs here).
+frameAs are original frames[0:-1] while frameCs/frame Bs are orginal frames[1:]
 """
 import os
 import sys

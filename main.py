@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+from tqdm import trange
 
 from config import Config
 from magnet import MagNet
@@ -33,15 +34,21 @@ print('Save_dir:', config.save_dir)
 
 # Data generator
 data_loader = get_gen_ABC(config, mode='train')
-print('Number of training image couples:', data_loader.data_len)
+print('Number of training image pairs:', data_loader.data_len)
 
 # Training
 for epoch in range(1, config.epochs+1):
     print('epoch:', epoch)
     losses, losses_y, losses_texture_AC, losses_texture_BM, losses_motion_BC = [], [], [], [], []
-    for idx_load in range(0, data_loader.data_len, data_loader.batch_size):
+    for idx_load in trange(0, data_loader.data_len, data_loader.batch_size):
 
         # Data Loading
+        # A: frame A 
+        # B: perturbed frame B 
+        # C: frame B 
+        # M: magnified B 
+        # amp: amplification factor
+        # each batch is a tensor with shape (batch_size, channel, width, height)
         batch_A, batch_B, batch_C, batch_M, batch_amp = data_loader.gen()
 
         # G Train
@@ -58,12 +65,12 @@ for epoch in range(1, config.epochs+1):
         losses_texture_AC.append(loss_texture_AC.item())
         losses_texture_BM.append(loss_texture_BM.item())
         losses_motion_BC.append(loss_motion_BC.item())
-        if (
-                idx_load > 0 and
-                ((idx_load // data_loader.batch_size) %
-                 (data_loader.data_len // data_loader.batch_size // config.num_val_per_epoch)) == 0
-        ):
-            print(', {}%'.format(idx_load * 100 // data_loader.data_len), end='')
+        # if (
+        #         idx_load > 0 and
+        #         ((idx_load // data_loader.batch_size) %
+        #          (data_loader.data_len // data_loader.batch_size // config.num_val_per_epoch)) == 0
+        # ):
+        #     print('{}%  '.format(idx_load * 100 // data_loader.data_len), end='')
 
     # Collections
     save_model(magnet.state_dict(), losses, config.save_dir, epoch)

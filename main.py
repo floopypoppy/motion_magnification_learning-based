@@ -1,3 +1,5 @@
+"""training the magnet
+"""
 import os
 import sys
 import time
@@ -56,6 +58,7 @@ for epoch in range(1, config.epochs+1):
         y_hat, texture_AC, texture_BM, motion_BC = magnet(batch_A, batch_B, batch_C, batch_M, batch_amp, mode='train')
         loss_y, loss_texture_AC, loss_texture_BM, loss_motion_BC = criterion_mag(y_hat, batch_M, texture_AC, texture_BM, motion_BC, criterion)
         loss = loss_y + (loss_texture_AC + loss_texture_BM + loss_motion_BC) * 0.1
+        # loss = loss_y + (loss_texture_AC + loss_motion_BC) * 0.1
         loss.backward()
         optimizer.step()
 

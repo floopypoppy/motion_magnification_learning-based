@@ -1,14 +1,14 @@
-"""
-test 
+"""test 
 -put the test video frames A and C in a folder named X (for example) or folders X, Y, ...These frames can be generated with make_frameACB.py from test video frames.
 -add self.dir_X, self.dir_Y, ... to config.py
--run it as python test_video X-Y-...
+-run it as python test_video.py X-Y-...
 """
 import os
 import sys
 import cv2
 import torch
 import numpy as np
+from tqdm import trange
 from config import Config
 from magnet import MagNet
 from data import get_gen_ABC, unit_postprocessing, numpy2cuda, resize2d
@@ -48,12 +48,12 @@ for testset in testsets:
     vid_size = cv2.imread(data_loader.paths[0]).shape[:2][::-1]
 
     # Test
-    for amp in [5, 10, 30, 50]:
+    for amp in [10]:
         frames = []
         data_loader = get_gen_ABC(config, mode='test_on_'+testset)
-        for idx_load in range(0, data_loader.data_len, data_loader.batch_size):
-            if (idx_load+1) % 100 == 0:
-                print('{}'.format(idx_load+1), end=', ')
+        for idx_load in trange(0, data_loader.data_len, data_loader.batch_size):
+            # if (idx_load+1) % 100 == 0:
+            #     print('{}'.format(idx_load+1), end=', ')
             batch_A, batch_B = data_loader.gen_test()
             amp_factor = numpy2cuda(amp)
             for _ in range(len(batch_A.shape) - len(amp_factor.shape)):

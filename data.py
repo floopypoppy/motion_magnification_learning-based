@@ -43,7 +43,7 @@ def load_unit(path):
 def unit_preprocessing(unit, preproc=[], is_test=False):
     """
     Preprocessing: 
-    -bilateralFilter/resize/downsample/poissonNoise
+    -bilateralFilter/resize/downsample/poissonNoise (depending on preproc option)
     -turn BGR into RGB
     -transform into [-1.0, 1.0]
     -change the shape into [channel, width, height]

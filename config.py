@@ -24,9 +24,11 @@ class Config(object):
         self.dir_guitar = os.path.join(self.data_dir, 'train/train_vid_frames/val_guitar')
         self.dir_cattoy = os.path.join(self.data_dir, 'train/train_vid_frames/val_cattoy')
         self.dir_myself = os.path.join(self.data_dir, 'train/train_vid_frames/myself')
-        self.frames_train = 'coco100'        # you can adapt 100000 to a smaller number to train
-        self.cursor_end = int(self.frames_train.split('coco')[-1])
+        self.frames_train = 'coco1000'        # you can adapt 100000 to a smaller number to train
+        self.cursor_end = int(self.frames_train.split('coco')[-1]) 
+        # number of training pairs
         self.coco_amp_lst = np.loadtxt(os.path.join(self.dir_train, 'train_mf.txt'))[:self.cursor_end]
+        # amplication factor for each training pairs (train_mf.txt)
         self.videos_train = []
         self.load_all = False        # Don't turn it on, unless you have such a big mem.
                                      # On coco dataset, 100, 000 sets -> 850G

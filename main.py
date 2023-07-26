@@ -21,37 +21,37 @@ from losses import criterion_mag
 
 from torch.utils.tensorboard import SummaryWriter
 
-def train(tune_config):
+def train(config):
     # Configurations
-    config = Config()
+    train_config = Config()
     cudnn.benchmark = True
 
     magnet = MagNetTrain().cuda()
-    if config.pretrained_weights:
-        magnet.load_state_dict(gen_state_dict(config.pretrained_weights))
+    if train_config.pretrained_weights:
+        magnet.load_state_dict(gen_state_dict(train_config.pretrained_weights))
     if torch.cuda.device_count() > 1:
         magnet = nn.DataParallel(magnet)
     criterion = nn.L1Loss().cuda()
 
-    optimizer = optim.Adam(magnet.parameters(), lr=tune_config['lr'], betas=config.betas)
+    optimizer = optim.Adam(magnet.parameters(), lr=config['lr'], betas=train_config.betas)
     # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, verbose=1, min_lr=config.lr/0.5**4, patience=5)
 
-    if not os.path.exists(config.save_dir):
-        os.makedirs(config.save_dir)
-    print('Save_dir:', config.save_dir)
+    if not os.path.exists(train_config.save_dir):
+        os.makedirs(train_config.save_dir)
+    print('Save_dir:', train_config.save_dir)
 
     # Data generator
-    data_loader = get_gen_ABC(config, mode='train')
+    data_loader = get_gen_ABC(train_config, mode='train')
     # print('Number of training image pairs:', data_loader.data_len)
 
-    writer = SummaryWriter(config.log_dir)
+    writer = SummaryWriter(train_config.log_dir)
 
     # Training
     n_batch = 0
     # running_loss = 0.0
     # batch_to_eval = 1000
 
-    for epoch in range(1, config.epochs+1):
+    for epoch in range(1, train_config.epochs+1):
         print('epoch:', epoch)
         # losses, losses_y, losses_texture_AC, losses_texture_BM, losses_motion_BC = [], [], [], [], []
         for _ in trange(0, data_loader.data_len, data_loader.batch_size):

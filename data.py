@@ -1,11 +1,12 @@
 import os
-from sklearn.utils import shuffle
-import cv2
-from skimage.io import imread
-from skimage.util import random_noise
 import numpy as np
 import torch
+import cv2
+import random
 import torch.nn.functional as F
+from skimage.io import imread
+from skimage.util import random_noise
+from sklearn.utils import shuffle
 from torch.autograd import Variable
 from PIL import Image, ImageFile
 
@@ -27,7 +28,8 @@ def gen_poisson_noise(unit):
 def load_unit(path):
     # Load a single frame
     file_suffix = path.split('.')[-1].lower()
-    # cv2.imread reads in BGR and uint8 format while skimage.io.imread reads in RGB and uint8 format
+    # cv2.imread reads in BGR and uint8 format.
+    # skimage.io.imread reads in RGB and uint8 format, channel last
     if file_suffix in ['jpg', 'png']:
         try:
             unit = cv2.cvtColor(imread(path).astype(np.uint8), cv2.COLOR_RGB2BGR)
@@ -43,14 +45,19 @@ def load_unit(path):
 def unit_preprocessing(unit, preproc=[], is_test=False):
     """
     Preprocessing: 
-    -bilateralFilter/resize/downsample/poissonNoise (depending on preproc option)
-    -turn BGR into RGB
     -transform into [-1.0, 1.0]
+    -bilateralFilter/resize/downsample/poissonNoise (depending on preproc option)
+    -turn BGR into RGB (RBG order is kept throughout training)
     -change the shape into [channel, width, height]
 
-    For training, batch A, B and C is preprocessed while batch M is not (the network output is not restrained within [-1.0, 1.0]).
+    For training, batch A, B, C and M are preprocessed.
     For test, the inputs are batch A and C (both unperturbed) and both are preprocessed.
     """
+
+    # rescale between [-1.0, 1.0]
+    unit = cv2.cvtColor(unit, cv2.COLOR_BGR2RGB)
+    unit = unit / 127.5 - 1.0
+
     if 'BF' in preproc and is_test:
         unit = cv2.bilateralFilter(unit, 9, 75, 75)
     if 'resize' in preproc:
@@ -58,19 +65,19 @@ def unit_preprocessing(unit, preproc=[], is_test=False):
     elif 'downsample' in preproc:
         unit = cv2.resize(unit, unit.shape[1]//2, unit.shape[0]//2, interpolation=cv2.INTER_LANCZOS4)
 
-    unit = cv2.cvtColor(unit, cv2.COLOR_BGR2RGB)
     try:
         if 'poisson' in preproc:
             # Use poisson noise from official repo or skimage?
+            
+            # as official repo
+            unit = unit + gen_poisson_noise(unit) * np.random.uniform(0, 0.3)
+            
+            # skimage
+#             unit = random_noise(unit, mode='poisson')      # unit: 0 ~ 1.0
+#             unit = unit * 255
 
-            # unit = unit + gen_poisson_noise(unit) * np.random.uniform(0, 0.3)
-
-            unit = random_noise(unit, mode='poisson')      # unit: 0 ~ 1.0
-            unit = unit * 255
     except Exception as e:
         print('EX:', e, unit.shape, unit.dtype)
-
-    unit = unit / 127.5 - 1.0
 
     unit = np.transpose(unit, (2, 0, 1))
     return unit
@@ -92,98 +99,103 @@ def unit_postprocessing(unit, vid_size=None):
 def get_paths_ABC(config, mode):
     if mode in ('train', 'test_on_trainset'):
         dir_root = config.dir_train
+
+        if config.cursor_end <= 0:
+            print('No input file for training')
+            return []
+
     elif mode == 'test_on_testset':
         dir_root = config.dir_test
     else:
-        val_vid = mode.split('_')[-1]
-        dir_root = eval('config.dir_{}'.format(val_vid))
-    paths_A, paths_C, paths_skip_intermediate, paths_skip, paths_mag = [], [], [], [], []
-    if config.cursor_end > 0 or 'test' in mode:
-        dir_A = os.path.join(dir_root, 'frameA')
-        files_A = sorted(os.listdir(dir_A), key=lambda x: int(x.split('.')[0]))
-        paths_A = [os.path.join(dir_A, file_A) for file_A in files_A]
-        if mode == 'train' and isinstance(config.cursor_end, int):
-            paths_A = paths_A[:config.cursor_end]
-        paths_C = [p.replace('frameA', 'frameC') for p in paths_A]
-        paths_mag = [p.replace('frameA', 'amplified') for p in paths_A]
-    else:
-        paths_A, paths_C, paths_skip_intermediate, paths_skip = [], [], [], []
-    if 'test' not in mode:
-        path_vids = os.path.join(config.dir_train, 'train_vid_frames')
-        dirs_vid = [os.path.join(path_vids, p, 'frameA') for p in config.videos_train]
-        for dir_vid in dirs_vid[:len(config.videos_train)]:
-            vid_frames = [
-                os.path.join(dir_vid, p) for p in sorted(
-                    os.listdir(dir_vid), key=lambda x: int(x.split('.')[0])
-                )]
-            if config.skip < 0:
-                lst = [p.replace('frameA', 'frameC') for p in vid_frames]
-                for idx, _ in enumerate(lst):
-                    skip_rand = np.random.randint(min(-config.skip, 2), -config.skip+1)
-                    idx_skip = min(idx + skip_rand, len(lst) - 1)
-                    paths_skip.append(lst[idx_skip])
-                    paths_skip_intermediate.append(lst[idx_skip//2])
-            paths_A += vid_frames
-        paths_C = [p.replace('frameA', 'frameC') for p in paths_A]
-    paths_B = [p.replace('frameC', 'frameB') for p in paths_C]
-    return paths_A, paths_B, paths_C, paths_skip, paths_skip_intermediate, paths_mag
+        val_vid = mode.split('-')[-1]
+        # dir_root = eval('config.dir_{}'.format(val_vid))
+        dir_root = os.path.join(config.data_dir, 'vids/{}'.format(val_vid))
 
+    dir_A = os.path.join(dir_root, 'frameA')
+    files_A = sorted(os.listdir(dir_A), key=lambda x: int(x.split('.')[0]))
+    paths_A = [os.path.join(dir_A, file_A) for file_A in files_A]
+    if mode == 'train' and isinstance(config.cursor_end, int):
+        paths_A = paths_A[:config.cursor_end]
+    
+    return paths_A
+
+def get_gen_ABC(config, mode='train', dynamic=True):
+#     paths_A = get_paths_ABC(config, mode)[0]
+    paths_A = get_paths_ABC(config, mode)
+    gen_train_A = DataGen(paths_A, config, mode, dynamic)
+    return gen_train_A
 
 class DataGen():
-    def __init__(self, paths, config, mode):
+    def __init__(self, paths, config, mode, dynamic):
         self.is_train = 'test' not in mode
         self.anchor = 0
-        self.paths = paths
-        self.batch_size = config.batch_size if self.is_train else config.batch_size_test
+        self.paths = paths # path of frameA
         self.data_len = len(paths)
-        self.load_all = config.load_all
-        self.data = []
-        self.preproc = config.preproc
-        self.coco_amp_lst = config.coco_amp_lst
 
-        if self.is_train and self.load_all:
-            self.units_A, self.units_C, self.units_M, self.units_B = [], [], [], []
-            for idx_data in range(self.data_len):
-                if idx_data % 500 == 0:
-                    print('Processing {} / {}.'.format(idx_data, self.data_len))
-                unit_A = load_unit(self.paths[idx_data])
-                unit_C = load_unit(self.paths[idx_data].replace('frameA', 'frameC'))
-                unit_M = load_unit(self.paths[idx_data].replace('frameA', 'amplified'))
-                unit_B = load_unit(self.paths[idx_data].replace('frameA', 'frameB'))
-                unit_A = unit_preprocessing(unit_A, preproc=self.preproc)
-                unit_C = unit_preprocessing(unit_C, preproc=self.preproc)
-                unit_M = unit_preprocessing(unit_M, preproc=[])
-                unit_B = unit_preprocessing(unit_B, preproc=self.preproc)
-                self.units_A.append(unit_A)
-                self.units_C.append(unit_C)
-                self.units_M.append(unit_M)
-                self.units_B.append(unit_B)
+        if self.is_train: # training mode
+            self.load_all = config.load_all
+            self.preproc = config.preproc
+            self.coco_amp_lst = list(config.coco_amp_lst)
+            self.batch_size = config.batch_size
 
-    def gen(self, anchor=None):
+            temp = list(zip(self.paths, self.coco_amp_lst))
+            random.shuffle(temp)
+            random.shuffle(temp)
+            random.shuffle(temp)
+            self.paths, self.coco_amp_lst = zip(*temp)
+
+            if config.validate:
+                self.data_len = int(len(self.paths) * (1 - config.validate_ratio))
+                self.validate_data_len = len(self.paths) - self.data_len
+                self.anchor_validate = self.data_len
+
+            if self.load_all:
+                self.units_A, self.units_C, self.units_M, self.units_B = [], [], [], []
+                for idx_data in range(self.data_len):
+                    if idx_data % 500 == 0:
+                        print('Processing {} / {}.'.format(idx_data, self.data_len))
+                    unit_A = load_unit(self.paths[idx_data])
+                    unit_C = load_unit(self.paths[idx_data].replace('frameA', 'frameC'))
+                    unit_M = load_unit(self.paths[idx_data].replace('frameA', 'amplified'))
+                    unit_B = load_unit(self.paths[idx_data].replace('frameA', 'frameB'))
+                    unit_A = unit_preprocessing(unit_A, preproc=self.preproc)
+                    unit_C = unit_preprocessing(unit_C, preproc=self.preproc)
+                    unit_M = unit_preprocessing(unit_M, preproc=[])
+                    unit_B = unit_preprocessing(unit_B, preproc=self.preproc)
+                    self.units_A.append(unit_A)
+                    self.units_C.append(unit_C)
+                    self.units_M.append(unit_M)
+                    self.units_B.append(unit_B)
+
+        elif 'temporal' not in mode: # test mode without a temporal filter
+            self.dynamic = dynamic
+            self.batch_size = config.batch_size_test
+            if not self.dynamic:
+                self.anchor_0 = self.anchor
+
+    def gen(self):
         batch_A = []
         batch_C = []
         batch_M = []
         batch_B = []
         batch_amp = []
-        if anchor is None:
-            anchor = self.anchor
 
         for _ in range(self.batch_size):
             if not self.load_all:
-                unit_A = load_unit(self.paths[anchor])
-                unit_C = load_unit(self.paths[anchor].replace('frameA', 'frameC'))
-                unit_M = load_unit(self.paths[anchor].replace('frameA', 'amplified'))
-                unit_B = load_unit(self.paths[anchor].replace('frameA', 'frameB'))
+                unit_A = load_unit(self.paths[self.anchor])
+                unit_C = load_unit(self.paths[self.anchor].replace('frameA', 'frameC'))
+                unit_M = load_unit(self.paths[self.anchor].replace('frameA', 'amplified'))
+                unit_B = load_unit(self.paths[self.anchor].replace('frameA', 'frameB'))
                 unit_A = unit_preprocessing(unit_A, preproc=self.preproc)
                 unit_C = unit_preprocessing(unit_C, preproc=self.preproc)
                 unit_M = unit_preprocessing(unit_M, preproc=[])
                 unit_B = unit_preprocessing(unit_B, preproc=self.preproc)
             else:
-                unit_A = self.units_A[anchor]
-                unit_C = self.units_C[anchor]
-                unit_M = self.units_M[anchor]
-                unit_B = self.units_B[anchor]
-            unit_amp = self.coco_amp_lst[anchor]
+                unit_A = self.units_A[self.anchor]
+                unit_C = self.units_C[self.anchor]
+                unit_M = self.units_M[self.anchor]
+                unit_B = self.units_B[self.anchor]
+            unit_amp = self.coco_amp_lst[self.anchor]
 
             batch_A.append(unit_A)
             batch_C.append(unit_C)
@@ -200,15 +212,50 @@ class DataGen():
         batch_amp = numpy2cuda(batch_amp).reshape(self.batch_size, 1, 1, 1)
         return batch_A, batch_B, batch_C, batch_M, batch_amp
 
-    def gen_test(self, anchor=None):
+    def gen_validate(self):
         batch_A = []
         batch_C = []
-        if anchor is None:
-            anchor = self.anchor
+        batch_M = []
+        batch_B = []
+        batch_amp = []
 
         for _ in range(self.batch_size):
-            unit_A = load_unit(self.paths[anchor])
-            unit_C = load_unit(self.paths[anchor].replace('frameA', 'frameC'))
+            unit_A = load_unit(self.paths[self.anchor_validate])
+            unit_C = load_unit(self.paths[self.anchor_validate].replace('frameA', 'frameC'))
+            unit_M = load_unit(self.paths[self.anchor_validate].replace('frameA', 'amplified'))
+            unit_B = load_unit(self.paths[self.anchor_validate].replace('frameA', 'frameB'))
+            unit_A = unit_preprocessing(unit_A, preproc=[], is_test=True)
+            unit_C = unit_preprocessing(unit_C, preproc=[], is_test=True)
+            unit_M = unit_preprocessing(unit_M, preproc=[], is_test=True)
+            unit_B = unit_preprocessing(unit_B, preproc=[], is_test=True)
+            unit_amp = self.coco_amp_lst[self.anchor_validate]
+            batch_A.append(unit_A)
+            batch_C.append(unit_C)
+            batch_M.append(unit_M)
+            batch_B.append(unit_B)
+            batch_amp.append(unit_amp)
+
+            self.anchor = (self.anchor_validate + 1)
+
+        batch_A = numpy2cuda(batch_A)
+        batch_C = numpy2cuda(batch_C)
+        batch_M = numpy2cuda(batch_M)
+        batch_B = numpy2cuda(batch_B)
+        batch_amp = numpy2cuda(batch_amp).reshape(self.batch_size, 1, 1, 1)
+
+        return batch_A, batch_B, batch_C, batch_M, batch_amp
+
+    def gen_test(self):
+        batch_A = []
+        batch_C = []
+
+        for _ in range(self.batch_size):
+
+            if not self.dynamic:
+                unit_A = load_unit(self.paths[self.anchor_0])
+            else:
+                unit_A = load_unit(self.paths[self.anchor])
+            unit_C = load_unit(self.paths[self.anchor].replace('frameA', 'frameC'))
             unit_A = unit_preprocessing(unit_A, preproc=[], is_test=True)
             unit_C = unit_preprocessing(unit_C, preproc=[], is_test=True)
             batch_A.append(unit_A)
@@ -218,13 +265,21 @@ class DataGen():
 
         batch_A = numpy2cuda(batch_A)
         batch_C = numpy2cuda(batch_C)
+
         return batch_A, batch_C
 
+    def gen_test_temporal(self):
+        batch_C = []
 
-def get_gen_ABC(config, mode='train'):
-    paths_A = get_paths_ABC(config, mode)[0]
-    gen_train_A = DataGen(paths_A, config, mode)
-    return gen_train_A
+        unit_C = load_unit(self.paths[self.anchor].replace('frameA', 'frameC'))
+        unit_C = unit_preprocessing(unit_C, preproc=[], is_test=True)
+
+        self.anchor = (self.anchor + 1) % self.data_len
+
+        batch_C.append(unit_C)
+        batch_C = numpy2cuda(batch_C)
+
+        return batch_C
 
 
 def cuda2numpy(tensor):

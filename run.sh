@@ -1,2 +1,2 @@
 python main.py
-python test_video.py baby-guitar-water-gun-drone-cattoy
+# python test_video.py baby-guitar-water-gun-drone-cattoy

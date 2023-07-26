@@ -118,7 +118,7 @@ class Decoder(nn.Module):
 
         if self.texture_downsample:
             self.texture_up = nn.UpsamplingNearest2d(scale_factor=2)
-            # self.texture_cba = Conv2D_activa(dim_in, 32, 3, 1, 1, activation='relu')
+            self.texture_cba = Conv2D_activa(dim_in, 32, 3, 1, 1, activation='relu')
 
         self.resblks = _repeat_blocks(ResBlk, 64, 64, num_resblk, dim_intermediate=64)
         self.up = nn.UpsamplingNearest2d(scale_factor=2)
@@ -150,39 +150,80 @@ class Manipulator(nn.Module):
 
     def forward(self, motion_A, motion_B, amp_factor):
         motion = motion_B - motion_A
-        motion_delta = self.g(motion) * amp_factor
+#         motion_delta = self.g(motion) * amp_factor
+        motion_delta = self.g(motion) * (amp_factor - 1)
         motion_delta = self.h_conv(motion_delta)
         motion_delta = self.h_resblk(motion_delta)
         motion_mag = motion_B + motion_delta 
         return motion_mag
 
 
-class MagNet(nn.Module):
+# class MagNet(nn.Module):
+#     def __init__(self):
+#         super(MagNet, self).__init__()
+#         self.encoder = Encoder(dim_in=3*1)
+#         self.manipulator = Manipulator()
+#         self.decoder = Decoder(dim_out=3*1)
+
+#     def forward(self, batch_A, batch_B, batch_C, batch_M, amp_factor, mode='train'):
+#         if mode == 'train':
+#             texture_A, motion_A = self.encoder(batch_A)
+#             texture_B, motion_B = self.encoder(batch_B)
+#             texture_C, motion_C = self.encoder(batch_C)
+#             texture_M, motion_M = self.encoder(batch_M)
+#             motion_mag = self.manipulator(motion_A, motion_B, amp_factor)
+#             y_hat = self.decoder(texture_B, motion_mag)
+#             texture_AC = [texture_A, texture_C]
+#             motion_BC = [motion_B, motion_C]
+#             texture_BM = [texture_B, texture_M]
+#             return y_hat, texture_AC, texture_BM, motion_BC
+#         elif mode == 'evaluate':
+#             texture_A, motion_A = self.encoder(batch_A)
+#             texture_B, motion_B = self.encoder(batch_B)
+#             motion_mag = self.manipulator(motion_A, motion_B, amp_factor)
+#             y_hat = self.decoder(texture_B, motion_mag)
+#             # texture_mag = self.manipulator(texture_A, texture_B, amp_factor)
+#             # y_hat = self.decoder(motion_B, texture_mag)
+#             return y_hat
+#         elif mode == 'examine':
+#             texture_A, motion_A = self.encoder(batch_A)
+#             texture_B, motion_B = self.encoder(batch_B)
+#             motion_mag = self.manipulator(motion_A, motion_B, amp_factor)
+#             y_hat = self.decoder(texture_B, motion_mag)
+#             return y_hat, texture_A, motion_A, texture_B, motion_B, motion_mag
+
+class MagNetTrain(nn.Module):
     def __init__(self):
         super(MagNet, self).__init__()
         self.encoder = Encoder(dim_in=3*1)
         self.manipulator = Manipulator()
         self.decoder = Decoder(dim_out=3*1)
 
-    def forward(self, batch_A, batch_B, batch_C, batch_M, amp_factor, mode='train'):
-        if mode == 'train':
-            texture_A, motion_A = self.encoder(batch_A)
-            texture_B, motion_B = self.encoder(batch_B)
-            texture_C, motion_C = self.encoder(batch_C)
-            texture_M, motion_M = self.encoder(batch_M)
-            motion_mag = self.manipulator(motion_A, motion_B, amp_factor)
-            y_hat = self.decoder(texture_B, motion_mag)
-            texture_AC = [texture_A, texture_C]
-            motion_BC = [motion_B, motion_C]
-            texture_BM = [texture_B, texture_M]
-            return y_hat, texture_AC, texture_BM, motion_BC
-        elif mode == 'evaluate':
-            texture_A, motion_A = self.encoder(batch_A)
-            texture_B, motion_B = self.encoder(batch_B)
-            motion_mag = self.manipulator(motion_A, motion_B, amp_factor)
-            y_hat = self.decoder(texture_B, motion_mag)
-            return y_hat
+    def forward(self, batch_A, batch_B, batch_C, batch_M, amp_factor):
+        texture_A, motion_A = self.encoder(batch_A)
+        texture_B, motion_B = self.encoder(batch_B)
+        texture_C, motion_C = self.encoder(batch_C)
+        texture_M, motion_M = self.encoder(batch_M)
+        motion_mag = self.manipulator(motion_A, motion_B, amp_factor)
+        y_hat = self.decoder(texture_B, motion_mag)
+        texture_AC = [texture_A, texture_C]
+        motion_BC = [motion_B, motion_C]
+        texture_BM = [texture_B, texture_M]
+        return y_hat, texture_AC, texture_BM, motion_BC
+    
+class MagNetEval(nn.Module):
+    def __init__(self):
+        super(MagNet, self).__init__()
+        self.encoder = Encoder(dim_in=3*1)
+        self.manipulator = Manipulator()
+        self.decoder = Decoder(dim_out=3*1)
 
+    def forward(self, batch_A, batch_B, amp_factor):
+        texture_A, motion_A = self.encoder(batch_A)
+        texture_B, motion_B = self.encoder(batch_B)
+        motion_mag = self.manipulator(motion_A, motion_B, amp_factor)
+        y_hat = self.decoder(texture_B, motion_mag)
+        return y_hat
 
 def main():
     model = MagNet()

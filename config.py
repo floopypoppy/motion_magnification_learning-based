@@ -11,8 +11,8 @@ class Config(object):
         else:   
             self.date = '0420'
 
-        # self.data_dir = '../'
-        self.data_dir = 'D:/deepmag_data'
+        self.data_dir = '../'
+        # self.data_dir = 'D:/deepmag_data'
         self.save_dir = 'output/weights_date_{}'.format(self.date)
         self.n_channels = 3 # number of channels of input images
 
